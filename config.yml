@@ -1,0 +1,3 @@
+# Example password hash, this is just "test". Change before using in production!
+pwhash: $argon2id$v=19$m=65536,t=3,p=4$rQXT24JG4VBk8swkrXnccg$NXbBOFYrzXN1Cr/WHCaKajsnOfOBWOSYNYWoeJKkNC0
+connstr: postgresql+psycopg://zope@/perfactema
