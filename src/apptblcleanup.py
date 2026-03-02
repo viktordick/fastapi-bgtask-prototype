@@ -1,3 +1,4 @@
+import time
 from dataclasses import dataclass
 from typing import Optional
 
@@ -9,6 +10,7 @@ from sqlalchemy import (
     Table,
     any_,
     delete,
+    literal,
     select,
     text,
 )
@@ -25,23 +27,23 @@ def Col(colname, **kw):
 metadata_obj = MetaData()
 
 
-@dataclass
-class AppTblCleanupRunResult:
-    count: int
-    limit_reached: bool
-
-
 class AppTblCleanup(SQLModel, table=True):
     id: Optional[int] = Col("apptblcleanup_id", default=None, primary_key=True)
     tablename: str = Col("apptblcleanup_tablename")
     range: Optional[str] = Col("apptblcleanup_range")
     filter: Optional[str] = Col("apptblcleanup_filter")
 
-    def run(self, session: Session) -> AppTblCleanupRunResult:
+    @dataclass
+    class RunResult:
+        count: int  # number of deleted records
+        elapsed: float  # time in seconds it took
+        limit_reached: bool  # if the limit was reached
+
+    def run(self, session: Session) -> RunResult:
         """
         Execute cleanup for the selected table.
-        Returns if the limit was reached
         """
+        start = time.monotonic()
         LIMIT = 100_000
         table = Table(
             self.tablename,
@@ -51,10 +53,10 @@ class AppTblCleanup(SQLModel, table=True):
             extend_existing=True,
         )
         ids = (
-            session.exec(
+            session.execute(
                 select(table.c.id)
                 .where(table.c.modtime < text("now() - (:ival)::interval"))
-                .where(text(self.filter))
+                .where(text(self.filter or "true"))
                 .params(ival=self.range)
                 .order_by(table.c.id)
                 .limit(LIMIT)
@@ -62,8 +64,10 @@ class AppTblCleanup(SQLModel, table=True):
             .scalars()
             .all()
         )
-        session.exec(delete(table).where(table.c.id == any_(ids)))
-        return AppTblCleanupRunResult(
+        session.execute(delete(table).where(table.c.id == any_(literal(ids))))
+        elapsed = time.monotonic() - start
+        return AppTblCleanup.RunResult(
             count=len(ids),
             limit_reached=(len(ids) == LIMIT),
+            elapsed=elapsed,
         )
