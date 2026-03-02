@@ -15,7 +15,9 @@ class DBSessionMiddleware(BaseHTTPMiddleware):
 
     def __init__(self, app, *, connstr: str):
         super().__init__(app)
-        self.engine = create_engine(connstr, echo=os.environ.get("SQL_DEBUG_ECHO"))
+        self.engine = create_engine(
+            connstr, echo=True if os.environ.get("SQL_DEBUG_ECHO") else False
+        )
 
     async def dispatch(self, request, call_next):
         response = Response("Internal server error", status_code=500)
